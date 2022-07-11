@@ -680,7 +680,7 @@ class SignalProcessor(threading.Thread):
             'bearing' : float(DOA_str),
             'confidence': float(confidence_str),
             'power': float(max_power_level_str),
-            'frequency': freq,
+            'frequency': float(freq),
             'raw_bearing_angles': list(np.around(angleArray,1)),
             'raw_doa': list(np.around(doaArray,3)),
             'bearing_type': 'relative',
