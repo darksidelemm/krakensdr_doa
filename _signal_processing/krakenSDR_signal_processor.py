@@ -669,6 +669,7 @@ class SignalProcessor(threading.Thread):
     def wr_chasemapper(self, station_id, DOA_str, confidence_str, max_power_level_str,
                freq, doa_result_log, latitude, longitude, heading, udp_port=55672):
         # ChaseMapper Output Format
+
         doaArray = []
         for i in range(len(doa_result_log)):
             doaArray.append(float(doa_result_log[i] + np.abs(np.min(doa_result_log))))
@@ -686,8 +687,6 @@ class SignalProcessor(threading.Thread):
             'bearing_type': 'relative',
             'source': 'krakensdr_doa'
         }
-
-        print(packet)
 
         # Set up our UDP socket
         s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
