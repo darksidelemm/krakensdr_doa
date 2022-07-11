@@ -671,7 +671,7 @@ class SignalProcessor(threading.Thread):
         # ChaseMapper Output Format
         doaArray = []
         for i in range(len(doa_result_log)):
-            doaArray.append(doa_result_log[i] + np.abs(np.min(doa_result_log)))
+            doaArray.append(float(doa_result_log[i] + np.abs(np.min(doa_result_log))))
         
         angleArray = np.linspace(0,360,len(doaArray))
 
