@@ -25,6 +25,7 @@ import os
 #os.environ['NUMBA_CPU_NAME'] = 'cortex-a72'
 
 import time
+import json
 import logging
 import threading
 import queue
@@ -673,20 +674,6 @@ class SignalProcessor(threading.Thread):
             doaArray.append(doa_result_log[i] + np.abs(np.min(doa_result_log)))
         
         angleArray = np.linspace(0,360,len(doaArray))
-
-
-        # jsonDict = {}
-        # jsonDict["tStamp"] = int(time.time() * 1000)
-        # jsonDict["latitude"] = 0
-        # jsonDict["longitude"] = 0
-        # jsonDict["gpsBearing"] = 0
-        # jsonDict["radioBearing"] = DOA_str
-        # jsonDict["conf"] = confidence_str
-        # jsonDict["power"] = max_power_level_str
-        # jsonDict["freq"] = freq #self.module_receiver.daq_center_freq
-        # jsonDict["antType"] = self.DOA_ant_alignment
-        # jsonDict["latency"] = 100
-        # jsonDict["doaArray"] = doaString
 
         packet = {
             'type' : 'BEARING',
