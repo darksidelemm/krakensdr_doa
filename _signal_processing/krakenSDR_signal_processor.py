@@ -675,18 +675,18 @@ class SignalProcessor(threading.Thread):
         angleArray = np.linspace(0,360,len(doaArray))
 
 
-        jsonDict = {}
-        jsonDict["tStamp"] = int(time.time() * 1000)
-        jsonDict["latitude"] = 0
-        jsonDict["longitude"] = 0
-        jsonDict["gpsBearing"] = 0
-        jsonDict["radioBearing"] = DOA_str
-        jsonDict["conf"] = confidence_str
-        jsonDict["power"] = max_power_level_str
-        jsonDict["freq"] = freq #self.module_receiver.daq_center_freq
-        jsonDict["antType"] = self.DOA_ant_alignment
-        jsonDict["latency"] = 100
-        jsonDict["doaArray"] = doaString
+        # jsonDict = {}
+        # jsonDict["tStamp"] = int(time.time() * 1000)
+        # jsonDict["latitude"] = 0
+        # jsonDict["longitude"] = 0
+        # jsonDict["gpsBearing"] = 0
+        # jsonDict["radioBearing"] = DOA_str
+        # jsonDict["conf"] = confidence_str
+        # jsonDict["power"] = max_power_level_str
+        # jsonDict["freq"] = freq #self.module_receiver.daq_center_freq
+        # jsonDict["antType"] = self.DOA_ant_alignment
+        # jsonDict["latency"] = 100
+        # jsonDict["doaArray"] = doaString
 
         packet = {
             'type' : 'BEARING',
