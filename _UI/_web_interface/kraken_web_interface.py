@@ -1071,6 +1071,7 @@ def generate_config_page_layout(webInterface_inst):
                                  {'label': 'Kerberos App', 'value': 'Kerberos App'},
                                  {'label': 'DF Aggregator', 'value': 'DF Aggregator'},
                                  {'label': 'RDF Mapper', 'value': 'RDF Mapper'},
+                                 {'label': 'ChaseMapper', 'value': 'ChaseMapper'},
                              ],
                              value=webInterface_inst.module_signal_processor.DOA_data_format,
                              style={"display": "inline-block"}, className="field-body"),

@@ -31,6 +31,7 @@ import queue
 import math
 import xml.etree.ElementTree as ET
 import requests
+import socket
 from multiprocessing.dummy import Pool
 
 # Import optimization modules
@@ -431,6 +432,16 @@ class SignalProcessor(threading.Thread):
                                         self.latitude,
                                         self.longitude,
                                         self.heading)
+                        elif self.DOA_data_format == "ChaseMapper":
+                            self.wr_chasemapper(self.station_id,
+                                        DOA_str,
+                                        confidence_str,
+                                        max_power_level_str,
+                                        write_freq,
+                                        doa_result_log,
+                                        self.latitude,
+                                        self.longitude,
+                                        self.heading)
                         elif self.DOA_data_format == "RDF Mapper":
                             epoch_time = int(time.time() * 1000)
 
@@ -653,6 +664,59 @@ class SignalProcessor(threading.Thread):
             r = requests.post('http://127.0.0.1:8042/doapost', json=jsonDict)
         except requests.exceptions.RequestException as e:
             self.logger.error("Error while posting to local websocket server")
+
+    def wr_chasemapper(self, station_id, DOA_str, confidence_str, max_power_level_str,
+               freq, doa_result_log, latitude, longitude, heading, udp_port=55672):
+        # ChaseMapper Output Format
+        doaArray = []
+        for i in range(len(doa_result_log)):
+            doaArray.append(doa_result_log[i] + np.abs(np.min(doa_result_log)))
+        
+        angleArray = np.linspace(0,360,len(doaArray))
+
+
+        jsonDict = {}
+        jsonDict["tStamp"] = int(time.time() * 1000)
+        jsonDict["latitude"] = 0
+        jsonDict["longitude"] = 0
+        jsonDict["gpsBearing"] = 0
+        jsonDict["radioBearing"] = DOA_str
+        jsonDict["conf"] = confidence_str
+        jsonDict["power"] = max_power_level_str
+        jsonDict["freq"] = freq #self.module_receiver.daq_center_freq
+        jsonDict["antType"] = self.DOA_ant_alignment
+        jsonDict["latency"] = 100
+        jsonDict["doaArray"] = doaString
+
+        packet = {
+            'type' : 'BEARING',
+            'bearing' : float(DOA_str),
+            'confidence': float(confidence_str),
+            'power': float(max_power_level_str),
+            'frequency': freq,
+            'raw_bearing_angles': list(np.around(angleArray,1)),
+            'raw_doa': list(np.around(doaArray,3)),
+            'bearing_type': 'relative',
+            'source': 'krakensdr_doa'
+        }
+
+        print(packet)
+
+        # Set up our UDP socket
+        s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        s.settimeout(1)
+        # Set up socket for broadcast, and allow re-use of the address
+        s.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except:
+            pass
+        s.bind(('',udp_port))
+        try:
+            s.sendto(json.dumps(packet).encode('ascii'), ('<broadcast>', udp_port))
+        except socket.error:
+            s.sendto(json.dumps(packet).encode('ascii'), ('127.0.0.1', udp_port))
 
     def update_recording_filename(self, filename):
         self.data_record_fd.close()
