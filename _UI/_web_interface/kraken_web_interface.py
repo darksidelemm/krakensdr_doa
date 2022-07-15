@@ -2251,7 +2251,7 @@ def update_dsp_params(update_freq, en_doa, en_fb_avg, spacing_meter, ant_arrange
         UCA_ant_spacing = (np.sqrt(2)*webInterface_inst.ant_spacing_meters*np.sqrt(1-np.cos(np.deg2rad(360/webInterface_inst.module_signal_processor.channel_number))))
         max_phase_diff = UCA_ant_spacing/wavelength
         smoothing_possibility = [{"label":"", "options": 1, "disabled": True}] # Disables the checkbox
-        spacing_label = "Array Radius [m, (2m=0.3, 70=0.14)]:"
+        spacing_label = "Array Radius [m]:"
     elif ant_arrangement == "Custom":
         max_phase_diff = 0.25 #ant_spacing_meter / wavelength
         smoothing_possibility = [{"label":"", "options": 1, "disabled": True}] # Disables the checkbox
