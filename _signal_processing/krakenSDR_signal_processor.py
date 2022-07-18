@@ -385,6 +385,7 @@ class SignalProcessor(threading.Thread):
                                 self.DOA_res_fd.truncate()
 
 
+
                         # Now create output for apps that only take one VFO
                         DOA_str = str(int(theta_0))
                         confidence_str = "{:.2f}".format(np.max(conf_val))
@@ -433,7 +434,7 @@ class SignalProcessor(threading.Thread):
                                         self.latitude,
                                         self.longitude,
                                         self.heading)
-                        elif self.DOA_data_format == "ChaseMapper":
+                        elif (self.DOA_data_format == "ChaseMapper") or (self.DOA_data_format == "Kraken App"):
                             self.wr_chasemapper(self.station_id,
                                         DOA_str,
                                         confidence_str,
