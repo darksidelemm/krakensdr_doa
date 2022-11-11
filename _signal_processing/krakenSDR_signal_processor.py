@@ -32,11 +32,8 @@ import queue
 import math
 import xml.etree.ElementTree as ET
 import requests
-<<<<<<< HEAD
 import socket
-=======
 import json
->>>>>>> upstream/main
 from multiprocessing.dummy import Pool
 
 # Import optimization modules
