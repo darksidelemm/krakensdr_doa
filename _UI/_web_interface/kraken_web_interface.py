@@ -121,15 +121,21 @@ class webInterface():
         self.module_signal_processor = SignalProcessor(data_que=self.sp_data_que, module_receiver=self.module_receiver, logging_level=self.logging_level)
         self.module_signal_processor.DOA_ant_alignment    = dsp_settings.get("ant_arrangement", "ULA")
         self.ant_spacing_meters = float(dsp_settings.get("ant_spacing_meters", 0.5))
-        self.module_signal_processor.DOA_inter_elem_space = self.ant_spacing_meters / (300 / self.module_receiver.daq_center_freq)
+
+        if self.module_signal_processor.DOA_ant_alignment == "UCA":
+            # Convert RADIUS to INTERELEMENT SPACING
+            inter_elem_spacing = (np.sqrt(2)*self.ant_spacing_meters*np.sqrt(1-np.cos(np.deg2rad(360/self.module_signal_processor.channel_number))))
+            self.module_signal_processor.DOA_inter_elem_space = inter_elem_spacing / (300 / float(dsp_settings.get("center_freq", 100.0)))
+        else:
+            self.module_signal_processor.DOA_inter_elem_space = self.ant_spacing_meters / (300 / float(dsp_settings.get("center_freq", 100.0)))
+
         self.module_signal_processor.ula_direction = dsp_settings.get("ula_direction", "Both")
         self.module_signal_processor.DOA_algorithm = dsp_settings.get("doa_method", "MUSIC")
 
-
         self.custom_array_x_meters = np.float_(dsp_settings.get("custom_array_x_meters", "0.1,0.2,0.3,0.4,0.5").split(","))
         self.custom_array_y_meters = np.float_(dsp_settings.get("custom_array_y_meters", "0.1,0.2,0.3,0.4,0.5").split(","))
-        self.module_signal_processor.custom_array_x = self.custom_array_x_meters / (300 / self.module_receiver.daq_center_freq)
-        self.module_signal_processor.custom_array_y = self.custom_array_y_meters / (300 / self.module_receiver.daq_center_freq)
+        self.module_signal_processor.custom_array_x = self.custom_array_x_meters / (300 / float(dsp_settings.get("center_freq", 100.0)))
+        self.module_signal_processor.custom_array_y = self.custom_array_y_meters / (300 / float(dsp_settings.get("center_freq", 100.0)))
         self.module_signal_processor.array_offset = int(dsp_settings.get("array_offset", 0))
 
         self.module_signal_processor.en_DOA_estimation    = dsp_settings.get("en_doa", 0)
@@ -160,6 +166,7 @@ class webInterface():
         self.module_signal_processor.active_vfos = int(dsp_settings.get("active_vfos", 0))
         self.module_signal_processor.output_vfo = int(dsp_settings.get("output_vfo", 0))
         self.module_signal_processor.optimize_short_bursts = dsp_settings.get("en_optimize_short_bursts", 0)
+        self.module_signal_processor.en_peak_hold = dsp_settings.get("en_peak_hold", 0)
         self.selected_vfo = 0
 
         for i in range(self.module_signal_processor.max_vfos):
@@ -186,6 +193,7 @@ class webInterface():
         self.daq_if_gains          ="[,,,,]"
         self.en_advanced_daq_cfg   = False
         self.en_basic_daq_cfg   = False
+        self.en_system_control     = False
         self.daq_ini_cfg_dict      = read_config_file_dict()
         self.active_daq_ini_cfg    = self.daq_ini_cfg_dict['config_name'] #"Default" # Holds the string identifier of the actively loaded DAQ ini configuration
         self.tmp_daq_ini_cfg       = "Default"
@@ -266,6 +274,7 @@ class webInterface():
         data["en_fbavg"]        = self.module_signal_processor.en_DOA_FB_avg
         data["compass_offset"]  = self.compass_offset
         data["doa_fig_type"]    = self._doa_fig_type
+        data["en_peak_hold"]    = self.module_signal_processor.en_peak_hold
 
         # Web Interface
         data["en_hw_check"]         = dsp_settings.get("en_hw_check", 0)
@@ -460,6 +469,7 @@ doa_trace_colors =	{
   "DoA Bartlett": "#00B5F7",
   "DoA Capon"   : "rgb(226,26,28)",
   "DoA MEM"     : "#1CA71C",
+  "DoA TNA"     : "rgb(255, 0, 255)",
   "DoA MUSIC"   : "rgb(257,233,111)"
 }
 figure_font_size = 20
@@ -650,6 +660,7 @@ def generate_config_page_layout(webInterface_inst):
     en_fb_avg_values      =[1] if webInterface_inst.module_signal_processor.en_DOA_FB_avg     else []
 
     en_optimize_short_bursts    =[1] if webInterface_inst.module_signal_processor.optimize_short_bursts     else []
+    en_peak_hold = [1] if webInterface_inst.module_signal_processor.en_peak_hold     else []
 
     en_fixed_heading = [1] if webInterface_inst.module_signal_processor.fixed_heading else []
 
@@ -996,6 +1007,7 @@ def generate_config_page_layout(webInterface_inst):
                 {'label': 'Bartlett', 'value': 'Bartlett'},
                 {'label': 'Capon'   , 'value': 'Capon'},
                 {'label': 'MEM'     , 'value': 'MEM'},
+                {'label': 'TNA'     , 'value': 'TNA'},
                 {'label': 'MUSIC'   , 'value': 'MUSIC'}
                 ],
         value=webInterface_inst.module_signal_processor.DOA_algorithm, style={"display":"inline-block"},className="field-body")
@@ -1047,6 +1059,13 @@ def generate_config_page_layout(webInterface_inst):
         dcc.Input(id="compass_offset", value=webInterface_inst.compass_offset, type='number', debounce=True, className="field-body-textbox"),
         ], className="field"),
 
+        html.Div([
+            html.Div("Spectrum Peak Hold:", id="label_peak_hold", className="field-label"),
+            dcc.Checklist(options=option, id="en_peak_hold", className="field-body",
+                          value=en_peak_hold),
+        ], className="field"),
+
+
     ], className="card")
 
     #--------------------------------
@@ -1059,6 +1078,7 @@ def generate_config_page_layout(webInterface_inst):
                 html.Div("Station ID:", id="station_id_label", className="field-label"),
                 dcc.Input(id='station_id_input',
                           value=webInterface_inst.module_signal_processor.station_id,
+                          pattern='[A-Za-z0-9\-]*',
                           type='text', className="field-body-textbox", debounce=True)
             ], className="field"),
             html.Div([
@@ -1072,13 +1092,14 @@ def generate_config_page_layout(webInterface_inst):
                                  {'label': 'DF Aggregator', 'value': 'DF Aggregator'},
                                  {'label': 'RDF Mapper', 'value': 'RDF Mapper'},
                                  {'label': 'ChaseMapper', 'value': 'ChaseMapper'},
+                                 {'label': 'Full POST', 'value': 'Full POST'},
                              ],
                              value=webInterface_inst.module_signal_processor.DOA_data_format,
                              style={"display": "inline-block"}, className="field-body"),
             ], className="field"),
 
             html.Div([
-                html.Div("RDF Mapper Server URL:", className="field-label"),
+                html.Div("RDF Mapper / Generic Server URL:", className="field-label"),
                 dcc.Input(id='rdf_mapper_server_address',
                           value=webInterface_inst.module_signal_processor.RDF_mapper_server,
                           type='text', className="field-body-textbox", debounce=True)
@@ -1309,8 +1330,25 @@ def generate_config_page_layout(webInterface_inst):
                     dcc.Input(id='vfo_' +str(i) + '_squelch', value=webInterface_inst.module_signal_processor.vfo_squelch[i], type='number', debounce=True, className="field-body-textbox")
                 ], className="field"),
         ], id="vfo"+str(i), className="card", style = {'display': 'block'} if i < webInterface_inst.module_signal_processor.active_vfos else {'display': 'none'} )
+        
+        
+        
+    system_control_card = \
+    html.Div([
+        html.Div([html.Div("Open System Control", id="label_en_system_control"     , className="field-label"),
+                dcc.Checklist(options=option     , id="en_system_control"     ,  className="field-body", value=webInterface_inst.en_system_control),
+        ], className="field"),
 
-    config_page_component_list = [start_stop_card, daq_status_card, daq_config_card, vfo_config_card, dsp_config_card, display_options_card, station_config_card, recording_config_card]
+        html.Div([
+          html.Div([html.Button('Restart Software', id='btn-restart_sw', className="btn-restart_sw", n_clicks=0)], className="field"),
+          html.Div([html.Button('Restart System', id='btn-restart_system', className="btn-restart_system", n_clicks=0)], className="field"),
+          html.Div([html.Button('Shutdown System', id='btn-shtudown_system', className="btn-shtudown_system", n_clicks=0)], className="field"),
+          html.Div([html.Button('Clear Cache and Restart', id='btn-clear_cache', className="btn-clear_cache", n_clicks=0)], className="field")
+        ], id='system_control_container'),
+
+    ], className="card")
+
+    config_page_component_list = [start_stop_card, daq_status_card, daq_config_card, vfo_config_card, dsp_config_card, display_options_card, station_config_card, recording_config_card, system_control_card]
 
     for i in range(webInterface_inst.module_signal_processor.max_vfos):
         config_page_component_list.append(vfo_card[i])
@@ -1540,6 +1578,7 @@ def settings_change_watcher():
         webInterface_inst.module_signal_processor.output_vfo = int(dsp_settings.get("output_vfo", 0))
         webInterface_inst.compass_offset = dsp_settings.get("compass_offset", 0)
         webInterface_inst.module_signal_processor.optimize_short_bursts = dsp_settings.get("en_optimize_short_bursts", 0)
+        webInterface_inst.module_signal_processor.en_peak_hold = dsp_settings.get("en_peak_hold", 0)
 
         for i in range(webInterface_inst.module_signal_processor.max_vfos):
             webInterface_inst.module_signal_processor.vfo_bw[i] = int(dsp_settings.get("vfo_bw_" + str(i), 0))
@@ -1724,10 +1763,24 @@ def update_daq_params(input_value, f0, gain):
     if webInterface_inst.module_signal_processor.run_processing:
         webInterface_inst.daq_center_freq = f0
         webInterface_inst.config_daq_rf(f0,gain)
+        
+        for i in range(webInterface_inst.module_signal_processor.max_vfos):
+            webInterface_inst.module_signal_processor.vfo_freq[i] = f0
+            app.push_mods({
+                f"vfo_{i}_freq" : {'value': f0}
+            })
 
         wavelength = 300 / webInterface_inst.daq_center_freq
-        webInterface_inst.module_signal_processor.DOA_inter_elem_space = webInterface_inst.ant_spacing_meters / wavelength
-        ant_spacing_wavelength = round(webInterface_inst.ant_spacing_meters / wavelength, 3)
+        #webInterface_inst.module_signal_processor.DOA_inter_elem_space = webInterface_inst.ant_spacing_meters / wavelength
+
+        if webInterface_inst.module_signal_processor.DOA_ant_alignment == "UCA":
+            # Convert RADIUS to INTERELEMENT SPACING
+            inter_elem_spacing = (np.sqrt(2)*webInterface_inst.ant_spacing_meters*np.sqrt(1-np.cos(np.deg2rad(360/webInterface_inst.module_signal_processor.channel_number))))
+            webInterface_inst.module_signal_processor.DOA_inter_elem_space = inter_elem_spacing / wavelength
+        else:
+            webInterface_inst.module_signal_processor.DOA_inter_elem_space = webInterface_inst.ant_spacing_meters / wavelength
+
+        ant_spacing_wavelength = round(webInterface_inst.module_signal_processor.DOA_inter_elem_space, 3)
         app.push_mods({
                'body_ant_spacing_wavelength': {'children': str(ant_spacing_wavelength)},
         })
@@ -1765,12 +1818,10 @@ def set_doa_format(doa_format):
 
 
 # Update Station ID
-@app.callback_shared(Output(component_id='station_header', component_property='children'),
+@app.callback_shared(None,
                      [Input(component_id='station_id_input', component_property='value')])
 def set_station_id(station_id):
-    valid_id = re.sub('[^A-Za-z0-9\-]+', '-', station_id)
-    webInterface_inst.module_signal_processor.station_id = valid_id
-    return valid_id
+    webInterface_inst.module_signal_processor.station_id = station_id
 
 @app.callback_shared(None,
                      [Input(component_id='krakenpro_key', component_property='value')])
@@ -1806,7 +1857,7 @@ def toggle_kraken_pro_key(doa_format_type):
 @app.callback(Output('rdf_mapper_server_address_field', 'style'),
               [Input('doa_format_type', 'value')])
 def toggle_kraken_pro_key(doa_format_type):
-    if doa_format_type == "RDF Mapper":
+    if doa_format_type == "RDF Mapper" or doa_format_type == "Full POST":
         return {'display': 'block'}
     else:
         return {'display': 'none'}
@@ -1998,7 +2049,43 @@ def stop_proc_btn(input_value):
 def save_config_btn(input_value):
     webInterface_inst.logger.info("Saving DAQ and DSP Configuration")
     webInterface_inst.save_configuration()
+    
+@app.callback_shared(
+    None,
+    [Input(component_id='btn-restart_sw', component_property='n_clicks')],
+)
+def restart_sw_btn(input_value):
+    webInterface_inst.logger.info("Restarting Software")
+    root_path             = os.path.dirname(os.path.dirname(os.path.dirname(current_path)))    
+    os.chdir(root_path)
+    daq_start_script = subprocess.Popen(['bash', "kraken_doa_start.sh"])#,
 
+@app.callback_shared(
+    None,
+    [Input(component_id='btn-restart_system'     , component_property='n_clicks')],
+)
+def restart_system_btn(input_value):
+    webInterface_inst.logger.info("Restarting System")
+    subprocess.call(["reboot"])
+
+@app.callback_shared(
+    None,
+    [Input(component_id='btn-shtudown_system'     , component_property='n_clicks')],
+)
+def shutdown_system_btn(input_value):
+    webInterface_inst.logger.info("Shutting System Down")
+    subprocess.call(["shutdown", "now"])  
+    
+@app.callback_shared(
+    None,
+    [Input(component_id='btn-clear_cache'     , component_property='n_clicks')],
+)
+def clear_cache_btn(input_value):
+    webInterface_inst.logger.info("Clearing Python and Numba Caches")
+    root_path             = os.path.dirname(os.path.dirname(os.path.dirname(current_path)))    
+    os.chdir(root_path)
+    daq_start_script = subprocess.Popen(['bash', "kraken_doa_start.sh", "-c"])#,
+    
 @app.callback_shared(
     None,
     [Input('spectrum-graph', 'clickData')]
@@ -2067,7 +2154,7 @@ def plot_doa():
                 doa_fig.add_trace(go.Scatterpolargl(theta=x, #webInterface_inst.doa_thetas,
                                              r=y, #doa_result,
                                              name=label,
-                                             fill= 'toself'
+                                             fill= 'toself',
                                              ))
 
                 doa_fig.update_layout(polar = dict(radialaxis_tickfont_size = figure_font_size,
@@ -2101,18 +2188,27 @@ def plot_doa():
         doa_max_str = ""
         if webInterface_inst.doa_thetas is not None and webInterface_inst.doa_results[0].size > 0:
             doa_max_str = str(webInterface_inst.doas[0])+"°"
-            update_data = dict(x=[webInterface_inst.doa_thetas], y=[webInterface_inst.doa_results[0]])
+
+            thetas = webInterface_inst.doa_thetas
+            result = webInterface_inst.doa_results[0]
+
+            update_data = dict(x=[thetas], y=[result])
 
             if webInterface_inst._doa_fig_type == 'Polar' :
-                update_data = dict(theta=[webInterface_inst.doa_thetas], r=[webInterface_inst.doa_results[0]])
+                thetas = np.append(webInterface_inst.doa_thetas, webInterface_inst.doa_thetas[0])
+                result = np.append(webInterface_inst.doa_results[0], webInterface_inst.doa_results[0][0])
+                update_data = dict(theta=[thetas], r=[result])
             elif webInterface_inst._doa_fig_type == 'Compass' :
+                thetas = np.append(webInterface_inst.doa_thetas, webInterface_inst.doa_thetas[0])
+                result = np.append(webInterface_inst.doa_results[0], webInterface_inst.doa_results[0][0])
                 doa_max_str = (360-webInterface_inst.doas[0]+webInterface_inst.compass_offset)%360
-                update_data = dict(theta=[(360-webInterface_inst.doa_thetas+webInterface_inst.compass_offset)%360], r=[webInterface_inst.doa_results[0]])
+                update_data = dict(theta=[(360-thetas+webInterface_inst.compass_offset)%360], r=[result])
 
             app.push_mods({
-                'doa-graph': {'extendData': [update_data, [0], len(webInterface_inst.doa_thetas)]},
+                'doa-graph': {'extendData': [update_data, [0], len(thetas)]},
                 'body_doa_max': {'children': doa_max_str}
             })
+
 
 def plot_spectrum():
     global spectrum_fig
@@ -2120,11 +2216,28 @@ def plot_spectrum():
     #if spectrum_fig == None:
     if webInterface_inst.reset_spectrum_graph_flag:
 
-        x=webInterface_inst.spectrum[0,:] + webInterface_inst.daq_center_freq*10**6
+        # Reset the peak hold each time the spectrum page is loaded
+        webInterface_inst.module_signal_processor.resetPeakHold()
+
+        x = webInterface_inst.spectrum[0, :] + webInterface_inst.daq_center_freq*10**6
 
         # Plot traces
         for m in range(np.size(webInterface_inst.spectrum, 0)-1):
             spectrum_fig.data[m]['x'] = x
+            
+        # As we use CH1 as the DISPLAY channel (due to lower noise characteristics), ensure we label it as CH1
+        # also we can hide the other channels
+        if webInterface_inst.module_signal_processor.spectrum_fig_type == 'Single':
+            spectrum_fig.update_layout(hovermode="closest")
+            spectrum_fig.data[0]['name'] = "Channel 1"
+            spectrum_fig.data[0]['visible'] = True
+            for m in range(1, webInterface_inst.module_receiver.M):
+                spectrum_fig.data[m]['visible'] = False
+        else:
+            spectrum_fig.update_layout(hovermode="x")
+            for m in range(webInterface_inst.module_receiver.M):
+                spectrum_fig.data[m]['name'] = "Channel {:d}".format(m)
+                spectrum_fig.data[m]['visible'] = True           
 
         # Hide non active traces
         for i in range(webInterface_inst.module_signal_processor.max_vfos):
@@ -2223,14 +2336,24 @@ def toggle_custom_array_fields(toggle_value):
     Input(component_id ="array_offset"           , component_property='value'),
     Input(component_id ="compass_offset"           , component_property='value'),
     Input(component_id ="custom_array_x_meters"           , component_property='value'),
-    Input(component_id ="custom_array_y_meters"           , component_property='value')],
+    Input(component_id ="custom_array_y_meters"           , component_property='value'),
+    Input(component_id ="en_peak_hold"           , component_property='value')],
 )
-def update_dsp_params(update_freq, en_doa, en_fb_avg, spacing_meter, ant_arrangement, doa_fig_type, doa_method, ula_direction, array_offset, compass_offset, custom_array_x_meters, custom_array_y_meters): #, input_value):
+def update_dsp_params(update_freq, en_doa, en_fb_avg, spacing_meter, ant_arrangement, doa_fig_type, doa_method, ula_direction, array_offset, compass_offset, custom_array_x_meters, custom_array_y_meters, en_peak_hold): #, input_value):
     webInterface_inst.ant_spacing_meters = spacing_meter
     wavelength = 300 / webInterface_inst.daq_center_freq
 
-    webInterface_inst.module_signal_processor.DOA_inter_elem_space = webInterface_inst.ant_spacing_meters / wavelength
-    ant_spacing_wavelength = round(webInterface_inst.ant_spacing_meters / wavelength, 3)
+    #webInterface_inst.module_signal_processor.DOA_inter_elem_space = webInterface_inst.ant_spacing_meters / wavelength
+
+    if ant_arrangement == "UCA":
+        # Convert RADIUS to INTERELEMENT SPACING
+        inter_elem_spacing = (np.sqrt(2) * webInterface_inst.ant_spacing_meters * np.sqrt(
+            1 - np.cos(np.deg2rad(360 / webInterface_inst.module_signal_processor.channel_number))))
+        webInterface_inst.module_signal_processor.DOA_inter_elem_space = inter_elem_spacing / wavelength
+    else:
+        webInterface_inst.module_signal_processor.DOA_inter_elem_space = webInterface_inst.ant_spacing_meters / wavelength
+
+    ant_spacing_wavelength = round(webInterface_inst.module_signal_processor.DOA_inter_elem_space, 3)
 
     spacing_label = ""
 
@@ -2245,16 +2368,16 @@ def update_dsp_params(update_freq, en_doa, en_fb_avg, spacing_meter, ant_arrange
     # Max phase diff and ambiguity warning and Spatial smoothing control
     if ant_arrangement == "ULA":
         max_phase_diff = webInterface_inst.ant_spacing_meters / wavelength
-        smoothing_possibility = [{"label":"", "options": 1, "disabled": False}] # Enables the checkbox
+        smoothing_possibility = [{"label":"", "value": 1, "disabled": False}] # Enables the checkbox
         spacing_label = "Interelement Spacing [m]:"
     elif ant_arrangement == "UCA":
         UCA_ant_spacing = (np.sqrt(2)*webInterface_inst.ant_spacing_meters*np.sqrt(1-np.cos(np.deg2rad(360/webInterface_inst.module_signal_processor.channel_number))))
         max_phase_diff = UCA_ant_spacing/wavelength
-        smoothing_possibility = [{"label":"", "options": 1, "disabled": True}] # Disables the checkbox
+        smoothing_possibility = [{"label":"", "value": 1, "disabled": True}] # Disables the checkbox
         spacing_label = "Array Radius [m]:"
     elif ant_arrangement == "Custom":
         max_phase_diff = 0.25 #ant_spacing_meter / wavelength
-        smoothing_possibility = [{"label":"", "options": 1, "disabled": True}] # Disables the checkbox
+        smoothing_possibility = [{"label":"", "value": 1, "disabled": True}] # Disables the checkbox
         spacing_label = "Interelement Spacing [m]"
 
     if max_phase_diff > 0.5:
@@ -2284,6 +2407,10 @@ def update_dsp_params(update_freq, en_doa, en_fb_avg, spacing_meter, ant_arrange
     webInterface_inst.module_signal_processor.ula_direction = ula_direction
     webInterface_inst.module_signal_processor.array_offset = array_offset
 
+    if en_peak_hold is not None and len(en_peak_hold):
+        webInterface_inst.module_signal_processor.en_peak_hold = True
+    else:
+        webInterface_inst.module_signal_processor.en_peak_hold = False
 
     return [str(ant_spacing_wavelength), spacing_label, ambiguity_warning, smoothing_possibility]
 
@@ -2436,7 +2563,16 @@ def reload_cfg_page(config_fname, dummy_0, dummy_1):
     webInterface_inst.needs_refresh = False
 
     return ["/config"]
-
+        
+@app.callback(Output('system_control_container', 'style'),
+             [Input("en_system_control", "value")]
+)
+def toggle_system_control(toggle_value):
+    webInterface_inst.en_system_control = toggle_value
+    if toggle_value:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}    
 
 @app.callback([Output("placeholder_update_rx", "children")],
               [Input("settings-refresh-timer", "n_intervals")],
@@ -2600,3 +2736,4 @@ html.Div([
     )
 ], className="card")
 """
+
