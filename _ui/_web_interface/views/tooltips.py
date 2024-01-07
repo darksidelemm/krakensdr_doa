@@ -24,7 +24,7 @@ dsp_config_tooltips = html.Div(
             className="tooltip",
         ),
         dbc.Tooltip(
-            [html.P("Spacing of the array specified in meters. For ULA the interelement spacing. For UCA the radius.")],
+            [html.P("Spacing of the array specified in meters. For ULA the interelement spacing. For UCA the radius. VK5QI: 2m = 0.3, 70cm = 0.14")],
             target="label_ant_spacing_meter",
             placement="bottom",
             className="tooltip",
