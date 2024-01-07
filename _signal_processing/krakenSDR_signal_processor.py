@@ -23,6 +23,7 @@ import json
 import logging
 import math
 import os
+import socket
 
 # Import built-in modules
 import threading
@@ -754,6 +755,16 @@ class SignalProcessor(threading.Thread):
                         doa_result_log = self.doa_result_log_list[0]
                         write_freq = self.freq_list[0]
 
+                        self.wr_chasemapper(self.station_id,
+                                    DOA_str,
+                                    confidence_str,
+                                    max_power_level_str,
+                                    write_freq,
+                                    doa_result_log,
+                                    self.latitude,
+                                    self.longitude,
+                                    self.heading)
+
                         if self.DOA_data_format == "DF Aggregator":
                             self.wr_xml(
                                 self.station_id,
@@ -1214,6 +1225,44 @@ class SignalProcessor(threading.Thread):
             # r = requests.post('http://127.0.0.1:8042/doapost', json=jsonDict)
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error while posting to local websocket server: {e}")
+
+    def wr_chasemapper(self, station_id, DOA_str, confidence_str, max_power_level_str,
+               freq, doa_result_log, latitude, longitude, heading, udp_port=55672):
+        # ChaseMapper Output Format
+
+        doaArray = []
+        for i in range(len(doa_result_log)):
+            doaArray.append(float(doa_result_log[i] + np.abs(np.min(doa_result_log))))
+        
+        angleArray = np.linspace(0,360,len(doaArray))
+
+        packet = {
+            'type' : 'BEARING',
+            'bearing' : float(DOA_str),
+            'confidence': float(confidence_str),
+            'power': float(max_power_level_str),
+            'frequency': float(freq),
+            'raw_bearing_angles': list(np.around(angleArray,1)),
+            'raw_doa': list(np.around(doaArray,3)),
+            'bearing_type': 'relative',
+            'source': 'krakensdr_doa'
+        }
+
+        # Set up our UDP socket
+        s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        s.settimeout(1)
+        # Set up socket for broadcast, and allow re-use of the address
+        s.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except:
+            pass
+        s.bind(('',udp_port))
+        try:
+            s.sendto(json.dumps(packet).encode('ascii'), ('<broadcast>', udp_port))
+        except socket.error:
+            s.sendto(json.dumps(packet).encode('ascii'), ('127.0.0.1', udp_port))
 
     def update_recording_filename(self, filename):
         self.data_record_fd.close()
